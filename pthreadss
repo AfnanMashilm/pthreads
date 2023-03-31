@@ -1,0 +1,66 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
+
+#define ROWS 1000
+#define COLS 1000
+#define DEPTH 1000
+
+int *matrixA, *matrixB, *matrixC;
+pthread_mutex_t lock;
+
+void *matrix_multiplication(void *arg) {
+    int *tid = (int*)arg;
+    int start_row = (*tid * ROWS) / 16;
+    int end_row = ((*tid) + 1) * ROWS / 16;
+    
+    for(int i = start_row; i < end_row; i++) {
+        for(int j = 0; j < COLS; j++) {
+            int sum = 0;
+            for(int k = 0; k < DEPTH; k++) {
+                sum += matrixA[i * DEPTH + k] * matrixB[k * COLS + j];
+            }
+            pthread_mutex_lock(&lock);
+            matrixC[i * COLS + j] += sum;
+            pthread_mutex_unlock(&lock);
+        }
+    }
+    pthread_exit(NULL);
+}
+
+int main() {
+    matrixA = calloc(ROWS * DEPTH, sizeof(int));
+    matrixB = calloc(DEPTH * COLS, sizeof(int));
+    matrixC = calloc(ROWS * COLS, sizeof(int));
+    
+    for(int i = 0; i < ROWS; i++) {
+        for(int j = 0; j < DEPTH; j++) {
+            matrixA[i * DEPTH + j] = i + j;
+        }
+    }
+    
+    for(int i = 0; i < DEPTH; i++) {
+        for(int j = 0; j < COLS; j++) {
+            matrixB[i * COLS + j] = i * j;
+        }
+    }
+
+    pthread_t threads[16];
+    int thread_ids[16];
+    
+    clock_t start_time = clock();
+    
+    for(int i = 0; i < 16; i++) {
+        thread_ids[i] = i;
+        pthread_create(&threads[i], NULL, matrix_multiplication, &thread_ids[i]);
+    }
+    
+    for(int i = 0; i < 16; i++) {
+        pthread_join(threads[i], NULL);
+    }
+    
+    clock_t end_time = clock();
+    
+    printf("\nRunning time: %f seconds\n", (double)(end_time - start_time) / CLOCKS_PER_SEC);
+}
